@@ -3,6 +3,7 @@ package dns01
 import (
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 
 	"github.com/miekg/dns"
@@ -70,6 +71,20 @@ func (p preCheck) checkDNSPropagation(fqdn, value string) (bool, error) {
 	authoritativeNss, err := lookupNameservers(fqdn)
 	if err != nil {
 		return false, err
+	}
+
+	// If the authoritative nameservers are not the same as the recursive ones, check the propagation on all of them
+	for _, resolver := range recursiveNameservers {
+		// DNS servers in recursiveNameservers have passed thru ParseNameservers and contains a port number
+		host, _, err := net.SplitHostPort(resolver)
+		if err != nil {
+			return false, err
+		}
+		// Check if the nameserver is already in the list
+		if !slices.Contains(authoritativeNss, strings.ToLower(host)) {
+			// If not, add it to the list
+			authoritativeNss = append(authoritativeNss, strings.ToLower(host))
+		}
 	}
 
 	return checkAuthoritativeNss(fqdn, value, authoritativeNss)
